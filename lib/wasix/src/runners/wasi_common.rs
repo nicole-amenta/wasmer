@@ -7,6 +7,7 @@ use std::{
 use anyhow::{Context, Error};
 use derivative::Derivative;
 use futures::future::BoxFuture;
+use tokio::io::AsyncWriteExt;
 use virtual_fs::{FileSystem, FsError, OverlayFileSystem, RootFileSystemBuilder, TmpFileSystem};
 use wasmer::Imports;
 use webc::metadata::annotations::Wasi as WasiAnnotation;
@@ -15,6 +16,7 @@ use crate::{
     bin_factory::BinaryPackage,
     capabilities::Capabilities,
     journal::{DynJournal, SnapshotTrigger},
+    runners::wasi::EnvironmentImageFile,
     WasiEnvBuilder,
 };
 
@@ -51,8 +53,21 @@ impl CommonWasiOptions {
         container_fs: Option<Arc<dyn FileSystem + Send + Sync>>,
         wasi: &WasiAnnotation,
         root_fs: Option<TmpFileSystem>,
+        env_image_files: &mut Vec<EnvironmentImageFile>,
     ) -> Result<(), anyhow::Error> {
         let root_fs = root_fs.unwrap_or_else(|| RootFileSystemBuilder::default().build());
+
+        for file in env_image_files {
+            let mut f = root_fs.new_open_options().write(true).create_new(true).open(&file.path)?;
+            let Some(content) = file.content.take() else {
+                return Err(anyhow::Error::msg("Image file already taken, did you execute the WASI runner twice?"))
+            };
+            futures::executor::block_on(tokio::spawn(async move {
+                f.write(&content).await?;
+                Ok::<(), anyhow::Error>(())
+            }))??;
+        }
+
         let fs = prepare_filesystem(root_fs, &self.mounts, container_fs)?;
 
         builder.add_preopen_dir("/")?;

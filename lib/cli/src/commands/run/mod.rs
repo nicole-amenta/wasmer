@@ -398,7 +398,7 @@ impl Run {
     ) -> Result<(), Error> {
         let program_name = wasm_path.display().to_string();
 
-        let runner = self.build_wasi_runner(&runtime)?;
+        let mut runner = self.build_wasi_runner(&runtime)?;
         runner.run_wasm(
             runtime,
             &program_name,

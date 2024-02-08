@@ -1,6 +1,8 @@
 //! WebC container support for running WASI modules
 
 use std::{path::PathBuf, sync::Arc};
+use std::cell::OnceCell;
+use std::path::Path;
 
 use anyhow::{Context, Error};
 use tracing::Instrument;
@@ -19,12 +21,19 @@ use crate::{
 
 use super::wasi_common::MappedCommand;
 
+#[derive(Debug, Clone)]
+pub(crate) struct EnvironmentImageFile {
+    pub(crate) path: PathBuf,
+    pub(crate) content: OnceCell<Vec<u8>>,
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct WasiRunner {
     wasi: CommonWasiOptions,
     stdin: Option<ArcBoxFile>,
     stdout: Option<ArcBoxFile>,
     stderr: Option<ArcBoxFile>,
+    files: Vec<EnvironmentImageFile>,
 }
 
 impl WasiRunner {
@@ -219,7 +228,7 @@ impl WasiRunner {
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub(crate) fn prepare_webc_env(
-        &self,
+        &mut self,
         program_name: &str,
         wasi: &Wasi,
         pkg: Option<&BinaryPackage>,
@@ -237,7 +246,7 @@ impl WasiRunner {
         };
 
         self.wasi
-            .prepare_webc_env(&mut builder, container_fs, wasi, root_fs)?;
+            .prepare_webc_env(&mut builder, container_fs, wasi, root_fs, &mut self.files)?;
 
         if let Some(stdin) = &self.stdin {
             builder.set_stdin(Box::new(stdin.clone()));
@@ -253,7 +262,7 @@ impl WasiRunner {
     }
 
     pub fn run_wasm(
-        &self,
+        &mut self,
         runtime: Arc<dyn Runtime + Send + Sync>,
         program_name: &str,
         module: &Module,
@@ -271,6 +280,14 @@ impl WasiRunner {
         }
 
         Ok(())
+    }
+
+    pub fn with_env_image_file(mut self, path: &Path, content: Vec<u8>) -> Self {
+        self.files.push(EnvironmentImageFile {
+            path: path.to_path_buf(),
+            content: content.into(),
+        });
+        self
     }
 }
 
