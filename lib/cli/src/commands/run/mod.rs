@@ -405,7 +405,9 @@ impl Run {
             module,
             module_hash,
             self.wasi.enable_async_threads,
-        )
+        )?;
+
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]

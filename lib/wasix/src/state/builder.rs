@@ -953,13 +953,15 @@ impl WasiEnvBuilder {
     #[allow(clippy::result_large_err)]
     pub fn run_ext(self, module: Module, module_hash: ModuleHash) -> Result<(), WasiRuntimeError> {
         let mut store = wasmer::Store::default();
-        self.run_with_store_ext(module, module_hash, &mut store)
+        self.run_with_store_ext(module, module_hash, &mut store)?;
+        Ok(())
     }
 
     #[allow(clippy::result_large_err)]
     #[tracing::instrument(level = "debug", skip_all)]
     pub fn run_with_store(self, module: Module, store: &mut Store) -> Result<(), WasiRuntimeError> {
-        self.run_with_store_ext(module, ModuleHash::random(), store)
+        self.run_with_store_ext(module, ModuleHash::random(), store)?;
+        Ok(())
     }
 
     #[allow(clippy::result_large_err)]
@@ -968,7 +970,9 @@ impl WasiEnvBuilder {
         module: Module,
         module_hash: ModuleHash,
         store: &mut Store,
-    ) -> Result<(), WasiRuntimeError> {
+    ) -> Result<Option<WasiFsRoot>, WasiRuntimeError> {
+        let fs = self.fs.clone();
+
         // If no handle or runtime exists then create one
         #[cfg(feature = "sys-thread")]
         let _guard = if tokio::runtime::Handle::try_current().is_err() {
@@ -1019,7 +1023,9 @@ impl WasiEnvBuilder {
 
         env.on_exit(store, Some(exit_code));
 
-        result
+        result?;
+
+        Ok(fs)
     }
 
     /// Start the WASI executable with async threads enabled.
@@ -1030,10 +1036,11 @@ impl WasiEnvBuilder {
         module: Module,
         module_hash: ModuleHash,
         mut store: Store,
-    ) -> Result<(), WasiRuntimeError> {
+    ) -> Result<Option<WasiFsRoot>, WasiRuntimeError> {
+        let fs = self.fs.clone();
         let (_, env) = self.instantiate_ext(module, module_hash, &mut store)?;
         env.run_async(store)?;
-        Ok(())
+        Ok(fs)
     }
 }
 
