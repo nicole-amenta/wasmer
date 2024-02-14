@@ -75,7 +75,13 @@ impl WcgiRunner {
         let wasi_common = self.config.wasi.clone();
         let rt = Arc::clone(&runtime);
         let setup_builder = move |builder: &mut WasiEnvBuilder| {
-            wasi_common.prepare_webc_env(builder, Some(Arc::clone(&container_fs)), &wasi, None, &mut vec![])?;
+            wasi_common.prepare_webc_env(
+                builder,
+                Some(Arc::clone(&container_fs)),
+                &wasi,
+                None,
+                &mut vec![],
+            )?;
             builder.set_runtime(Arc::clone(&rt));
             Ok(())
         };

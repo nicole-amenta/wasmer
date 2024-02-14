@@ -58,9 +58,15 @@ impl CommonWasiOptions {
         let root_fs = root_fs.unwrap_or_else(|| RootFileSystemBuilder::default().build());
 
         for file in env_image_files {
-            let mut f = root_fs.new_open_options().write(true).create_new(true).open(&file.path)?;
+            let mut f = root_fs
+                .new_open_options()
+                .write(true)
+                .create_new(true)
+                .open(&file.path)?;
             let Some(content) = file.content.take() else {
-                return Err(anyhow::Error::msg("Image file already taken, did you execute the WASI runner twice?"))
+                return Err(anyhow::Error::msg(
+                    "Image file already taken, did you execute the WASI runner twice?",
+                ));
             };
             futures::executor::block_on(tokio::spawn(async move {
                 f.write(&content).await?;

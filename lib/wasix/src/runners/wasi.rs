@@ -1,8 +1,8 @@
 //! WebC container support for running WASI modules
 
-use std::{path::PathBuf, sync::Arc};
 use std::cell::OnceCell;
 use std::path::Path;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Error};
 use tracing::Instrument;
@@ -13,6 +13,7 @@ use webc::metadata::{annotations::Wasi, Command};
 use crate::{
     bin_factory::BinaryPackage,
     capabilities::Capabilities,
+    fs::WasiFsRoot,
     journal::{DynJournal, SnapshotTrigger},
     runners::{wasi_common::CommonWasiOptions, MappedDirectory, MountedDirectory},
     runtime::{module_cache::ModuleHash, task_manager::VirtualTaskManagerExt},
@@ -268,18 +269,16 @@ impl WasiRunner {
         module: &Module,
         module_hash: ModuleHash,
         asyncify: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<WasiFsRoot>, Error> {
         let wasi = webc::metadata::annotations::Wasi::new(program_name);
         let mut store = runtime.new_store();
         let env = self.prepare_webc_env(program_name, &wasi, None, runtime, None)?;
 
-        if asyncify {
-            env.run_with_store_async(module.clone(), module_hash, store)?;
+        Ok(if asyncify {
+            env.run_with_store_async(module.clone(), module_hash, store)?
         } else {
-            env.run_with_store_ext(module.clone(), module_hash, &mut store)?;
-        }
-
-        Ok(())
+            env.run_with_store_ext(module.clone(), module_hash, &mut store)?
+        })
     }
 
     pub fn with_env_image_file(mut self, path: &Path, content: Vec<u8>) -> Self {
